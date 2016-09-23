@@ -296,6 +296,15 @@ module ActsAsTree
       self.class.select {|node| node.ancestors.size == self.ancestors.size }
     end
 
+    # Returns key for the current nods generation in the generations hash
+    #
+    #  root1child1.generation_key 1
+    def generation_key
+      self.class.generations.select {
+        |key, value| value.include?(self)
+      }.keys.first
+    end
+
     # Returns children (without subchildren) and current node itself.
     #
     #   root.self_and_children # => [root, child1]
