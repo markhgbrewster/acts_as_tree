@@ -282,6 +282,20 @@ module ActsAsTree
       parent ? parent.children : self.class.roots
     end
 
+    # Returns all the nodes at the same level in the tree as the current node.
+    #
+    #  root1child1.generation [root1child2, root2child1, root2child2]
+    def generation
+      self_and_generation - [self]
+    end
+
+    # Returns a reference to the current node and all the nodes at the same level as it in the tree.
+    #
+    #  root1child1.generation [root1child1, root1child2, root2child1, root2child2]
+    def self_and_generation
+      self.class.select {|node| node.ancestors.size == self.ancestors.size }
+    end
+
     # Returns children (without subchildren) and current node itself.
     #
     #   root.self_and_children # => [root, child1]
