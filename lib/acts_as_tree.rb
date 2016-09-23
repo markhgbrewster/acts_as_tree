@@ -119,6 +119,13 @@ module ActsAsTree
         end
       EOV
 
+      # Returns a hash of all nodes grouped by their level in the tree structure.
+      #
+      # Class.generations { 0=> [root1, root2], 1=> [root1child1, root1child2, root2child1, root2child2] }
+      def self.generations
+        all.group_by{ |node| node.ancestors.size }
+      end
+
       if configuration[:counter_cache]
         after_update :update_parents_counter_cache
 
