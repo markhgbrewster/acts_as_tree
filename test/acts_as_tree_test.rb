@@ -587,4 +587,11 @@ class GenertaionMethods < ActsAsTreeTestCase
       @child1_child.self_and_generation
     assert_equal [@child1_child_child], @child1_child_child.self_and_generation
   end
+
+  def test_generation_key
+    assert_equal 0, @root1.generation_key
+    assert_equal 1, @root_child1.generation_key
+    assert_equal 2, @child1_child.generation_key
+    assert_equal 3, @child1_child_child.generation_key
+  end
 end
