@@ -570,4 +570,21 @@ class GenertaionMethods < ActsAsTreeTestCase
       TreeMixin.generations
     )
   end
+
+  def test_generation
+    assert_equal [@root2, @root3], @root1.generation
+    assert_equal [@root_child2, @root2_child1, @root2_child2],
+      @root_child1.generation
+    assert_equal [@root2_child1_child], @child1_child.generation
+    assert_equal [], @child1_child_child.generation
+  end
+
+  def test_self_and_generation
+    assert_equal [@root1, @root2, @root3], @root1.self_and_generation
+    assert_equal [@root_child1, @root_child2, @root2_child1, @root2_child2],
+      @root_child1.self_and_generation
+    assert_equal [@child1_child, @root2_child1_child],
+      @child1_child.self_and_generation
+    assert_equal [@child1_child_child], @child1_child_child.self_and_generation
+  end
 end
