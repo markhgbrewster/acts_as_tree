@@ -47,29 +47,27 @@ end
 
 ActiveRecord::Base.establish_connection adapter: "sqlite3", database: ":memory:"
 
-def setup_db(counter_cache = false)
+def setup_db(options = {})
   # AR keeps printing annoying schema statements
   capture_stdout do
     ActiveRecord::Base.logger
     ActiveRecord::Schema.define(version: 1) do
-      create_table :mixins do |t|
+      create_table :mixins, force: true do |t|
         t.column :type, :string
         t.column :parent_id, :integer
-        t.column(:children_count, :integer, default: 0) if counter_cache
+        t.column :external_id, :integer if options[:external_ids]
+        t.column :external_parent_id, :integer if options[:external_ids]
+        t.column :children_count, :integer, default: 0 if options[:counter_cache]
         t.timestamps null: false
       end
     end
 
-    Mixin.reset_column_information
-  end
-end
-
-def teardown_db
-  # Silence tables deprecation on rails 5.0
-  ActiveSupport::Deprecation.silence do
-    ActiveRecord::Base.connection.tables.each do |table|
-      ActiveRecord::Base.connection.drop_table(table)
+    # Fix broken reset_column_information in some activerecord versions.
+    if ActiveRecord::VERSION::MAJOR == 3 && ActiveRecord::VERSION::MINOR == 2 ||
+       ActiveRecord::VERSION::MAJOR == 4 && ActiveRecord::VERSION::MINOR == 1
+      ActiveRecord::Base.connection.schema_cache.clear!
     end
+    Mixin.reset_column_information
   end
 end
 
@@ -99,25 +97,30 @@ class RecursivelyCascadedTreeMixin < Mixin
 end
 
 class TreeMixinWithTouch < Mixin
-   acts_as_tree foreign_key: "parent_id", order: "id", touch: true
+  acts_as_tree foreign_key: "parent_id", order: "id", touch: true
+end
+
+class ExternalTreeMixin < Mixin
+  acts_as_tree foreign_key: "external_parent_id", primary_key: "external_id"
+end
+
+class ExternalTreeMixinNullify < Mixin
+  acts_as_tree foreign_key: "external_parent_id", primary_key: "external_id", order: "id", dependent: :nullify
 end
 
 class TreeTest < ActsAsTreeTestCase
 
   def setup
     setup_db
+    @tree_mixin = TreeMixin
 
-    @root1              = TreeMixin.create!
-    @root_child1        = TreeMixin.create! parent_id: @root1.id
-    @child1_child       = TreeMixin.create! parent_id: @root_child1.id
-    @child1_child_child = TreeMixin.create! parent_id: @child1_child.id
-    @root_child2        = TreeMixin.create! parent_id: @root1.id
-    @root2              = TreeMixin.create!
-    @root3              = TreeMixin.create!
-  end
-
-  def teardown
-    teardown_db
+    @root1              = @tree_mixin.create!
+    @root_child1        = @tree_mixin.create! parent_id: @root1.id
+    @child1_child       = @tree_mixin.create! parent_id: @root_child1.id
+    @child1_child_child = @tree_mixin.create! parent_id: @child1_child.id
+    @root_child2        = @tree_mixin.create! parent_id: @root1.id
+    @root2              = @tree_mixin.create!
+    @root3              = @tree_mixin.create!
   end
 
   def test_children
@@ -135,12 +138,12 @@ class TreeTest < ActsAsTreeTestCase
   end
 
   def test_delete
-    assert_equal 7, TreeMixin.count
+    assert_equal 7, @tree_mixin.count
     @root1.destroy
-    assert_equal 2, TreeMixin.count
+    assert_equal 2, @tree_mixin.count
     @root2.destroy
     @root3.destroy
-    assert_equal 0, TreeMixin.count
+    assert_equal 0, @tree_mixin.count
   end
 
   def test_insert
@@ -166,7 +169,7 @@ class TreeTest < ActsAsTreeTestCase
   end
 
   def test_root
-    assert_equal @root1, TreeMixin.root
+    assert_equal @root1, @tree_mixin.root
     assert_equal @root1, @root1.root
     assert_equal @root1, @root_child1.root
     assert_equal @root1, @child1_child.root
@@ -176,15 +179,15 @@ class TreeTest < ActsAsTreeTestCase
   end
 
   def test_roots
-    assert_equal [@root1, @root2, @root3], TreeMixin.roots
+    assert_equal [@root1, @root2, @root3], @tree_mixin.roots
   end
 
   def test_leaves
-    assert_equal [@child1_child_child, @root_child2, @root2, @root3], TreeMixin.leaves
+    assert_equal [@child1_child_child, @root_child2, @root2, @root3], @tree_mixin.leaves
   end
 
   def test_default_tree_order
-    assert_equal [@root1, @root_child1, @child1_child, @child1_child_child, @root_child2, @root2, @root3], TreeMixin.default_tree_order
+    assert_equal [@root1, @root_child1, @child1_child, @child1_child_child, @root_child2, @root2, @root3], @tree_mixin.default_tree_order
   end
 
   def test_siblings
@@ -261,9 +264,9 @@ class TreeTest < ActsAsTreeTestCase
   end
 
   def test_tree_view
-    assert_equal false, Mixin.respond_to?(:tree_view)
-    Mixin.extend ActsAsTree::TreeView
-    assert_equal true,  TreeMixin.respond_to?(:tree_view)
+    assert_equal false, @tree_mixin.respond_to?(:tree_view)
+    @tree_mixin.extend ActsAsTree::TreeView
+    assert_equal true,  @tree_mixin.respond_to?(:tree_view)
 
     tree_view_outputs = <<-END.gsub(/^ {6}/, '')
       root
@@ -275,15 +278,15 @@ class TreeTest < ActsAsTreeTestCase
        |_ 6
        |_ 7
     END
-    assert_equal tree_view_outputs, capture_stdout { TreeMixin.tree_view(:id) }
+    assert_equal tree_view_outputs, capture_stdout { @tree_mixin.tree_view(:id) }
   end
 
   def test_tree_walker
-    assert_equal false, TreeMixin.respond_to?(:walk_tree)
-    assert_equal false, TreeMixin.new.respond_to?(:walk_tree)
-    TreeMixin.extend ActsAsTree::TreeWalker
-    assert_equal true,  TreeMixin.respond_to?(:walk_tree)
-    assert_equal true,  TreeMixin.new.respond_to?(:walk_tree)
+    assert_equal false, @tree_mixin.respond_to?(:walk_tree)
+    assert_equal false, @tree_mixin.new.respond_to?(:walk_tree)
+    @tree_mixin.extend ActsAsTree::TreeWalker
+    assert_equal true,  @tree_mixin.respond_to?(:walk_tree)
+    assert_equal true,  @tree_mixin.new.respond_to?(:walk_tree)
 
     walk_tree_dfs_output = <<-END.gsub(/^\s+/, '')
       1
@@ -294,7 +297,7 @@ class TreeTest < ActsAsTreeTestCase
       6
       7
       END
-    assert_equal walk_tree_dfs_output, capture_stdout { TreeMixin.walk_tree{|elem, level| puts "#{'-'*level}#{elem.id}"} }
+    assert_equal walk_tree_dfs_output, capture_stdout { @tree_mixin.walk_tree{|elem, level| puts "#{'-'*level}#{elem.id}"} }
 
     walk_tree_dfs_sub_output = <<-END.gsub(/^\s+/, '')
       2
@@ -313,7 +316,7 @@ class TreeTest < ActsAsTreeTestCase
       --3
       ---4
       END
-    assert_equal walk_tree_bfs_output, capture_stdout { TreeMixin.walk_tree(:algorithm => :bfs){|elem, level| puts "#{'-'*level}#{elem.id}"} }
+    assert_equal walk_tree_bfs_output, capture_stdout { @tree_mixin.walk_tree(:algorithm => :bfs){|elem, level| puts "#{'-'*level}#{elem.id}"} }
 
     walk_tree_bfs_sub_output = <<-END.gsub(/^\s+/, '')
       2
@@ -327,7 +330,6 @@ end
 
 class TestDeepDescendantsPerformance < ActsAsTreeTestCase
   def setup
-    teardown_db
     setup_db
     @root1 = TreeMixin.create!
     create_cascade_children @root1, "root1", 10
@@ -343,10 +345,6 @@ class TestDeepDescendantsPerformance < ActsAsTreeTestCase
 
     @root5        = TreeMixin.create!
     create_cascade_children @root5, "root5", 50
-  end
-
-  def teardown
-    teardown_db
   end
 
   def self.bench_range
@@ -378,7 +376,6 @@ end
 class TreeTestWithEagerLoading < ActsAsTreeTestCase
 
   def setup
-    teardown_db
     setup_db
     @root1        = TreeMixin.create!
     @root_child1  = TreeMixin.create! parent_id: @root1.id
@@ -391,10 +388,6 @@ class TreeTestWithEagerLoading < ActsAsTreeTestCase
     @rc2 = RecursivelyCascadedTreeMixin.create! parent_id: @rc1.id
     @rc3 = RecursivelyCascadedTreeMixin.create! parent_id: @rc2.id
     @rc4 = RecursivelyCascadedTreeMixin.create! parent_id: @rc3.id
-  end
-
-  def teardown
-    teardown_db
   end
 
   def test_eager_association_loading
@@ -444,10 +437,6 @@ class TreeTestWithoutOrder < ActsAsTreeTestCase
     @root2 = TreeMixinWithoutOrder.create!
   end
 
-  def teardown
-    teardown_db
-  end
-
   def test_root
     assert [@root1, @root2].include? TreeMixinWithoutOrder.root
   end
@@ -464,10 +453,6 @@ class UnsavedTreeTest < ActsAsTreeTestCase
     @root_child = @root.children.build
   end
 
-  def teardown
-    teardown_db
-  end
-
   def test_inverse_of
     # We want children to be aware of their parent before saving either
     assert_equal @root, @root_child.parent
@@ -477,8 +462,7 @@ end
 
 class TreeTestWithCounterCache < ActsAsTreeTestCase
   def setup
-    teardown_db
-    setup_db(true)
+    setup_db counter_cache: true
 
     @root          = TreeMixinWithCounterCache.create!
     @child1        = TreeMixinWithCounterCache.create! parent_id: @root.id
@@ -486,10 +470,6 @@ class TreeTestWithCounterCache < ActsAsTreeTestCase
     @child2        = TreeMixinWithCounterCache.create! parent_id: @root.id
 
     [@root, @child1, @child1_child1, @child2].map(&:reload)
-  end
-
-  def teardown
-    teardown_db
   end
 
   def test_counter_cache
@@ -516,26 +496,48 @@ class TreeTestWithCounterCache < ActsAsTreeTestCase
   end
 end
 
-
 class TreeTestWithTouch < ActsAsTreeTestCase
   def setup
-    teardown_db
     setup_db
 
     @root  = TreeMixinWithTouch.create!
     @child = TreeMixinWithTouch.create! parent_id: @root.id
   end
 
-  def teardown
-    teardown_db
-  end
-
   def test_updated_at
     previous_root_updated_at = @root.updated_at
     @child.update_attributes(:type => "new_type")
     @root.reload
-    
+
     assert @root.updated_at != previous_root_updated_at
+  end
+end
+
+class ExternalTreeTest < TreeTest
+  def setup
+    setup_db external_ids: true
+    @tree_mixin = ExternalTreeMixin
+
+    @root1              = @tree_mixin.create! external_id: 1101
+    @root_child1        = @tree_mixin.create! external_id: 1102, external_parent_id: @root1.external_id
+    @child1_child       = @tree_mixin.create! external_id: 1103, external_parent_id: @root_child1.external_id
+    @child1_child_child = @tree_mixin.create! external_id: 1104, external_parent_id: @child1_child.external_id
+    @root_child2        = @tree_mixin.create! external_id: 1105, external_parent_id: @root1.external_id
+    @root2              = @tree_mixin.create! external_id: 1106
+    @root3              = @tree_mixin.create! external_id: 1107
+  end
+
+  def test_nullify
+    root4       = ExternalTreeMixinNullify.create! external_id: 1108
+    root4_child = ExternalTreeMixinNullify.create! external_id: 1109, external_parent_id: root4.external_id
+
+    assert_equal 2, ExternalTreeMixinNullify.count
+    assert_equal root4.external_id, root4_child.external_parent_id
+
+    root4.destroy
+
+    assert_equal 1, ExternalTreeMixinNullify.count
+    assert_nil root4_child.reload.external_parent_id
   end
 end
 
@@ -553,10 +555,6 @@ class GenertaionMethods < ActsAsTreeTestCase
     @root2_child2       = TreeMixin.create! parent_id: @root2.id
     @root2_child1_child = TreeMixin.create! parent_id: @root2_child1.id
     @root3              = TreeMixin.create!
-  end
-
-  def teardown
-    teardown_db
   end
 
   def test_generations
@@ -595,3 +593,4 @@ class GenertaionMethods < ActsAsTreeTestCase
     assert_equal 3, @child1_child_child.generation_key
   end
 end
+
