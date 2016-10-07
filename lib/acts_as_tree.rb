@@ -129,7 +129,7 @@ module ActsAsTree
       #
       # Class.generations { 0=> [root1, root2], 1=> [root1child1, root1child2, root2child1, root2child2] }
       def self.generations
-        all.group_by{ |node| node.ancestors.size }
+        all.group_by{ |node| node.level }
       end
 
       if configuration[:counter_cache]
@@ -299,18 +299,16 @@ module ActsAsTree
     #
     #  root1child1.generation [root1child1, root1child2, root2child1, root2child2]
     def self_and_generation
-      self.class.select {|node| node.ancestors.size == self.ancestors.size }
+      self.class.select {|node| node.level == self.level }
     end
 
-    # Returns key for the current nods generation in the generations hash
+    # Returns level (key) for the current nods generation in the generations hash
     #
-    #  root1child1.generation_key 1
-    def generation_key
-      self.class.generations.select {
-        |key, value| value.include?(self)
-      }.keys.first
+    #  root1child1.level 1
+    def level
+      self.ancestors.size
     end
-    
+
     # Returns children (without subchildren) and current node itself.
     #
     #   root.self_and_children # => [root, child1]
