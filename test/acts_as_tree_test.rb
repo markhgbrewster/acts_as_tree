@@ -516,7 +516,6 @@ class TreeTestWithCounterCache < ActsAsTreeTestCase
   end
 end
 
-
 class TreeTestWithTouch < ActsAsTreeTestCase
   def setup
     teardown_db
