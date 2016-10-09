@@ -302,7 +302,7 @@ module ActsAsTree
       self.class.select {|node| node.level == self.level }
     end
 
-    # Returns level (key) for the current nods generation in the generations hash
+    # Returns the level (depth) of the current node
     #
     #  root1child1.level 1
     def level
