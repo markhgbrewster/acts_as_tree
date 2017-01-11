@@ -306,9 +306,21 @@ module ActsAsTree
     # Returns the level (depth) of the current node 
     #
     #  root1child1.tree_level # => 1
-
     def tree_level
       self.ancestors.size
+    end
+
+    # Returns the level (depth) of the current node unless level is a column on the node. 
+    # Allows backwards compatibility with older versions of the gem.  
+    # Allows integration with apps using level as a column name.
+    #
+    #  root1child1.level # => 1
+    def level
+      if self.class.column_names.include?('level')
+        super
+      else
+        tree_level
+      end
     end
 
     # Returns children (without subchildren) and current node itself.
