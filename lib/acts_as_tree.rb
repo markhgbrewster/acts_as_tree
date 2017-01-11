@@ -129,8 +129,9 @@ module ActsAsTree
       #
       # Class.generations # => { 0=> [root1, root2], 1=> [root1child1, root1child2, root2child1, root2child2] }
       def self.generations
-        all.group_by{ |node| node.level }
+        all.group_by{ |node| node.tree_level }
       end
+
 
       if configuration[:counter_cache]
         after_update :update_parents_counter_cache
@@ -299,13 +300,14 @@ module ActsAsTree
     #
     #  root1child1.self_and_generation # => [root1child1, root1child2, root2child1, root2child2]
     def self_and_generation
-      self.class.select {|node| node.level == self.level }
+      self.class.select {|node| node.tree_level == self.tree_level }
     end
 
-    # Returns the level (depth) of the current node
+    # Returns the level (depth) of the current node 
     #
-    #  root1child1.level # => 1
-    def level
+    #  root1child1.tree_level # => 1
+
+    def tree_level
       self.ancestors.size
     end
 

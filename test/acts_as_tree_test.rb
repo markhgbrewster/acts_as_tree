@@ -586,11 +586,11 @@ class GenerationMethods < ActsAsTreeTestCase
     assert_equal [@child1_child_child], @child1_child_child.self_and_generation
   end
 
-  def test_level
-    assert_equal 0, @root1.level
-    assert_equal 1, @root_child1.level
-    assert_equal 2, @child1_child.level
-    assert_equal 3, @child1_child_child.level
+  def test_tree_level
+    assert_equal 0, @root1.tree_level
+    assert_equal 1, @root_child1.tree_level
+    assert_equal 2, @child1_child.tree_level
+    assert_equal 3, @child1_child_child.tree_level
   end
 end
 
