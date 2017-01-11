@@ -127,7 +127,7 @@ module ActsAsTree
 
       # Returns a hash of all nodes grouped by their level in the tree structure.
       #
-      # Class.generations { 0=> [root1, root2], 1=> [root1child1, root1child2, root2child1, root2child2] }
+      # Class.generations # => { 0=> [root1, root2], 1=> [root1child1, root1child2, root2child1, root2child2] }
       def self.generations
         all.group_by{ |node| node.level }
       end
@@ -290,21 +290,21 @@ module ActsAsTree
 
     # Returns all the nodes at the same level in the tree as the current node.
     #
-    #  root1child1.generation [root1child2, root2child1, root2child2]
+    #  root1child1.generation # => [root1child2, root2child1, root2child2]
     def generation
       self_and_generation - [self]
     end
 
     # Returns a reference to the current node and all the nodes at the same level as it in the tree.
     #
-    #  root1child1.generation [root1child1, root1child2, root2child1, root2child2]
+    #  root1child1.self_and_generation # => [root1child1, root1child2, root2child1, root2child2]
     def self_and_generation
       self.class.select {|node| node.level == self.level }
     end
 
     # Returns the level (depth) of the current node
     #
-    #  root1child1.level 1
+    #  root1child1.level # => 1
     def level
       self.ancestors.size
     end

@@ -541,7 +541,7 @@ class ExternalTreeTest < TreeTest
   end
 end
 
-class GenertaionMethods < ActsAsTreeTestCase
+class GenerationMethods < ActsAsTreeTestCase
   def setup
     setup_db
 
